@@ -11,7 +11,8 @@ typedef enum {
     SNAKE_LEFT,
     SNAKE_RIGHT,
     SNAKE_UP,
-    SNAKE_DOWN
+    SNAKE_DOWN,
+    SNAKE_UNKNOWN
 } snake_direction_enum;
 
 typedef struct {
@@ -20,10 +21,8 @@ typedef struct {
 } snake_block_st;
 
 typedef struct {
-    int headx;
-    int heady;
-    int tailx;
-    int taily;
+    int size;
+    snake_block_st block[SNAKE_MAX_SIZE];
 } snake_st;
 
 static snake_direction_enum snake_direction;
@@ -72,6 +71,12 @@ static void *thread_func(void *arg) {
     return (void *)0;
 }
 
+static void snake_paint(snake_st *snake) {
+    for (int i = 0; i < snake->size; i++)
+    	mvaddch(snake->block[i].x, snake->block[i].y, SNAKE_LOOKS);
+    refresh();
+}
+
 int main() {
     pthread_t t1;
     void *res;
@@ -95,15 +100,15 @@ int main() {
     getmaxyx(stdscr, row, col);	/* Get window size */
 
     /* Initialize the snake */
-    snake.headx = row/2;
-    snake.heady = col/2 - SNAKE_INITIAL_SIZE;
-    snake.tailx = row/2;
-    snake.taily = col/2;  
+    snake.size = 0;
+    for (int i = 0; i < SNAKE_INITIAL_SIZE; i++) {
+	snake.block[i].x = row/2;
+	snake.block[i].y = col/2 - i;
+	snake.block[i].neighbour = SNAKE_LEFT;
+	snake.size++;
+    }
     
-    /* Paint the initial snake. */
-    for (int i = snake.heady; i < snake.taily; i++)
-    	mvaddch(snake.headx, i, SNAKE_LOOKS);
-    refresh();
+    snake_paint(&snake);	/* Initial snake. */
 
     /* Watch for keyboard input. */
     if ((s = pthread_create(&t1, NULL, thread_func, "This is on thread")) != 0)
@@ -121,25 +126,38 @@ int main() {
 
 	switch(direction) {
 	case SNAKE_LEFT:
-	    snake.heady--;
+	    for (int i = 0; i < snake.size; i++) {
+		mvaddch(snake.block[i].x, snake.block[i].y, ' ');
+		snake.block[i].y--;              
+	    }
 	    break;
 	case SNAKE_RIGHT:
-	    snake.heady++;
+	    for (int i = 0; i < snake.size; i++) {
+		mvaddch(snake.block[i].x, snake.block[i].y, ' ');
+		snake.block[i].y++;
+	    }
 	    break;
 	case SNAKE_UP:
-	    snake.headx--;
+	    for (int i = 0; i < snake.size; i++) {
+		mvaddch(snake.block[i].x, snake.block[i].y, ' ');
+		snake.block[i].x--;
+	    }
 	    break;
 	case SNAKE_DOWN:
-	    snake.headx++;
+	    for (int i = 0; i < snake.size; i++) {
+		mvaddch(snake.block[i].x, snake.block[i].y, ' ');
+		snake.block[i].x++;
+	    }
 	    break;
 	}
-        
+
+	snake_paint(&snake);
 	/* Update head */
-	mvaddch(snake.headx, snake.heady, SNAKE_LOOKS);
-	refresh();
+	/* mvaddch(snake.headx, snake.heady, SNAKE_LOOKS); */
+	/* refresh(); */
 
 	/* Kill tail */
-	mvaddch(snake.tailx, --snake.taily, ' ');
+	/* mvaddch(snake.tailx, --snake.taily, ' '); */
 
 	usleep(100000);
     }
