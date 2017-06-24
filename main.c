@@ -37,7 +37,7 @@ static SnakeBlock snake_new_head_pos(Snake *snake, SnakeBlock block) {
     SnakeBlock oldtail;
 
     /* Handle the head. */
-    if (snake->head == snake->capacity)
+    if (snake->head == snake->capacity - 1)
 	/* Reached the end of buffer list, start from the beginning. */
 	snake->head = 0;
     else 
@@ -46,7 +46,7 @@ static SnakeBlock snake_new_head_pos(Snake *snake, SnakeBlock block) {
     
     /* Handle the tail. */
     oldtail = snake->block[snake->tail];
-    if (snake->tail == snake->capacity)
+    if (snake->tail == snake->capacity - 1)
 	snake->tail = 0;
     else
 	snake->tail++;
