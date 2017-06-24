@@ -179,16 +179,16 @@ int main() {
         
     	switch(direction) {
     	case SNAKE_LEFT:
-	    head.y--;
+	    head.y = head.y == 0 ? col : --head.y;
 	    break;
     	case SNAKE_RIGHT:
-            head.y++;
-    	    break;
+	    head.y = head.y == col ? 0 : ++head.y;
+	    break;
     	case SNAKE_UP:
-            head.x--;
+	    head.x = head.x == 0 ? row : --head.x;
 	    break;
     	case SNAKE_DOWN:
-            head.x++;
+	    head.x = head.x == row ? 0 : ++head.x;
 	    break;
     	}
 
