@@ -33,7 +33,7 @@ static void snake_init(Snake *snake, int x, int y) {
 
 /* Move snake head to a new position, advancing the tail as well.
  The old tail position is returned to the calling function. */
-static SnakeBlock snake_new_head_pos(Snake *snake, int newx, int newy) {
+static SnakeBlock snake_new_head_pos(Snake *snake, SnakeBlock block) {
     SnakeBlock oldtail;
 
     /* Handle the head. */
@@ -42,26 +42,21 @@ static SnakeBlock snake_new_head_pos(Snake *snake, int newx, int newy) {
 	snake->head = 0;
     else 
 	snake->head++;
-    snake->block[snake->head].x = newx;
-    snake->block[snake->head].y = newy;    
+    snake->block[snake->head] = block;
     
     /* Handle the tail. */
-    oldtail.x = snake->block[snake->tail].x;
-    oldtail.y = snake->block[snake->tail].y;
+    oldtail = snake->block[snake->tail];
     if (snake->tail == snake->capacity)
 	snake->tail = 0;
     else
 	snake->tail++;
-    
     return oldtail;
 }
 
 static SnakeBlock snake_head_coordinates(Snake *snake) {
     SnakeBlock head;
 
-    head.x = snake->block[snake->head].x;
-    head.y = snake->block[snake->head].y;
-
+    head = snake->block[snake->head];
     return head;
 }
 
@@ -97,68 +92,58 @@ static void snake_paint(Snake *snake) {
 typedef enum {
     SNAKE_LEFT,
     SNAKE_RIGHT,
+    SNAKE_UNKNOWN,
     SNAKE_UP,
     SNAKE_DOWN,
-    SNAKE_UNKNOWN
-} snake_direction_enum;
+} SnakeDirection;
 
-
-static snake_direction_enum snake_direction;
+static SnakeDirection snake_direction;
 static int should_exit;
-
 static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 
+static void mutex_lock() {
+    int ret;
+    if ((ret = pthread_mutex_lock(&mtx)) != 0)
+	exit(1);
+}
+
+static void mutex_unlock() {
+    int ret;
+    if ((ret = pthread_mutex_unlock(&mtx)) != 0)
+	exit(1);
+}
+
 static void *snake_update_direction(void *arg) {
-    int ch;
-    int s;
+    int key, new_direction, diff;
     
     while(should_exit != 1) {
-	ch = getch();
-	if ((s = pthread_mutex_lock(&mtx)) != 0)
-	    exit(1);
+	key = getch();      
+	new_direction = key == KEY_LEFT ? SNAKE_LEFT:
+	    key == KEY_RIGHT ? SNAKE_RIGHT:
+	    key == KEY_UP ? SNAKE_UP:
+	    key == KEY_DOWN ? SNAKE_DOWN : SNAKE_UNKNOWN;
 
-	switch (ch) {
-	case KEY_LEFT:
-	    if (snake_direction != SNAKE_RIGHT) /* Don't allow going backwards. */
-		snake_direction = SNAKE_LEFT;
-	    break;
-	case KEY_RIGHT:
-	    if (snake_direction != SNAKE_LEFT)
-		snake_direction = SNAKE_RIGHT;
-	    break;
-	case KEY_UP:
-	    if (snake_direction != SNAKE_DOWN)
-		snake_direction = SNAKE_UP;
-	    break;
-	case KEY_DOWN:
-	    if (snake_direction != SNAKE_UP)
-		snake_direction = SNAKE_DOWN;
-	    break;
-	case 'q':
-	    should_exit = 1;
-	    break;
-	default:
-	    /* Keep going in the same direction as before. */
-	    break;
+	/* Current direction and the new direction cannot be next to
+	   each other in the enum. This would mean going backwards. */
+	diff = new_direction - snake_direction;
+	if ((diff != 1) && (diff != -1)) {
+            mutex_lock();
+	    snake_direction = new_direction;
+	    mutex_unlock();
 	}
-        
-	if ((s = pthread_mutex_unlock(&mtx)) != 0)
-	    exit(1);
 	
 	usleep(100000);		/* Avoid goind backwards by tapping keys in quick succession. */
     }
-    
     return (void *)0;
 }
 
 int main() {
-    pthread_t t1;
-    void *res;
-    int s, ch, will_exit;
+    pthread_t t1;  
+    int ch, will_exit;
     int row, col;
 
     Snake snake;
-    snake_direction_enum direction;
+    SnakeDirection direction;
 
     /* General initializations */
     will_exit = 0;
@@ -178,43 +163,36 @@ int main() {
     snake_paint(&snake);
 
     /* Watch for keyboard input. */
-    if ((s = pthread_create(&t1, NULL, snake_update_direction, NULL)) != 0)
+    if ((pthread_create(&t1, NULL, snake_update_direction, NULL)) != 0)
     	exit(1);
 
     /* Main loop. */
     while (will_exit != 1) {
     	/* Maybe the user has changes the snake direction or wants to go home */
-    	if ((s = pthread_mutex_lock(&mtx)) != 0)
-    	    exit(1);
+	mutex_lock();
         direction = snake_direction;
     	will_exit = should_exit;
-    	if ((s = pthread_mutex_unlock(&mtx)) != 0)
-    	    exit(1);
-
+	mutex_unlock();
+        
 	SnakeBlock head, tail;
 	head = snake_head_coordinates(&snake);
-	int nextx, nexty;
-
+        
     	switch(direction) {
     	case SNAKE_LEFT:
-            nextx = head.x;
-	    nexty = head.y - 1;
-    	    break;
+	    head.y--;
+	    break;
     	case SNAKE_RIGHT:
-            nextx = head.x;
-	    nexty = head.y + 1;
+            head.y++;
     	    break;
     	case SNAKE_UP:
-            nextx = head.x - 1;
-	    nexty = head.y;
-    	    break;
+            head.x--;
+	    break;
     	case SNAKE_DOWN:
-            nextx = head.x + 1;
-	    nexty = head.y;
-    	    break;
+            head.x++;
+	    break;
     	}
 
-        tail = snake_new_head_pos(&snake, nextx, nexty);
+        tail = snake_new_head_pos(&snake, head);
 	snake_paint(&snake);
 	snake_paint_block(tail, ' '); /* Tail erase. */
 	/* mvprintw(25, 0, "Old: %d, %d", oldtail.x, oldtail.y); */
@@ -223,11 +201,11 @@ int main() {
 	usleep(100000);
     }
 
-    if ((s = pthread_join(t1, &res)) != 0)
+    void *res;
+    if ((pthread_join(t1, &res)) != 0)
     	exit(1);
 
     endwin();
- 
     return 0;
 }
 
