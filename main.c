@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #define SNAKE_MAX_SIZE 25
-#define SNAKE_INITIAL_SIZE 15
+#define SNAKE_INITIAL_SIZE 5
 #define SNAKE_LOOKS ACS_DIAMOND
 
 typedef struct {
@@ -33,7 +33,7 @@ static void snake_init(Snake *snake, int x, int y) {
 
 /* Move snake head to a new position, advancing the tail as well.
  The old tail position is returned to the calling function. */
-static SnakeBlock snake_new_head_pos(Snake *snake, SnakeBlock block) {
+static SnakeBlock snake_new_head_pos(Snake *snake, SnakeBlock block, bool keep_tail) {
     SnakeBlock oldtail;
 
     /* Handle the head. */
@@ -46,10 +46,14 @@ static SnakeBlock snake_new_head_pos(Snake *snake, SnakeBlock block) {
     
     /* Handle the tail. */
     oldtail = snake->block[snake->tail];
-    if (snake->tail == snake->capacity - 1)
-	snake->tail = 0;
-    else
-	snake->tail++;
+    if (keep_tail == false) {
+	if (snake->tail == snake->capacity - 1)
+	    snake->tail = 0;
+	else
+	    snake->tail++;
+    }
+    /* else */
+	/* snake->size++; */
     return oldtail;
 }
 
@@ -137,11 +141,45 @@ static void *snake_update_direction(void *arg) {
     return (void *)0;
 }
 
+typedef enum {
+    GOODIE_APPLE,
+    GOODIE_TOTAL
+} Goodie;
+
+static chtype goodies[GOODIE_TOTAL] = {
+    'x'
+};
+
+// https://stackoverflow.com/questions/2509679/how-to-generate-a-random-number-from-within-a-range
+static unsigned int rand_interval(unsigned int min, unsigned int max)
+{
+    int r;
+    const unsigned int range = 1 + max - min;
+    const unsigned int buckets = RAND_MAX / range;
+    const unsigned int limit = buckets * range;
+
+    do
+    {
+        r = rand();
+    } while (r >= limit);
+    return min + (r / buckets);
+}
+
+/* Put a new goodie on the x, y map */
+static void world_new_goodie(Goodie goodie, int x, int y) {
+    int xpos, ypos;
+
+    xpos = rand_interval(0, x);
+    ypos = rand_interval(0, y);
+
+    mvaddch(xpos, ypos, goodies[goodie]);
+}
+
 int main() {
     pthread_t t1;  
     int ch, will_exit;
-    int row, col;
-
+    int row, col, next_goodie;
+    bool goodie_on_screen;
     Snake snake;
     SnakeDirection direction;
 
@@ -161,6 +199,10 @@ int main() {
     /* Initialize the snake */
     snake_init(&snake, row/2, col/2);
     snake_paint(&snake);
+
+    /* Initialize the world. */
+    next_goodie = 0;
+    goodie_on_screen = false;
 
     /* Watch for keyboard input. */
     if ((pthread_create(&t1, NULL, snake_update_direction, NULL)) != 0)
@@ -195,16 +237,34 @@ int main() {
         /* It looks bad if the next head position is a snake block. */
 	chtype next_head = mvinch(head.x, head.y);
 	if (next_head != SNAKE_LOOKS) {
-	    tail = snake_new_head_pos(&snake, head);
+	    if (next_head == goodies[GOODIE_APPLE]) {
+		tail = snake_new_head_pos(&snake, head, true);
+		goodie_on_screen = false;
+	    }
+	    else {
+		tail = snake_new_head_pos(&snake, head, false);
+		snake_paint_block(tail, ' ');
+	    }
 	    snake_paint(&snake);
-	    snake_paint_block(tail, ' '); /* Tail erase. */
+	    /* Tail erase. */
 	    /* mvprintw(25, 0, "Old: %d, %d", oldtail.x, oldtail.y); */
 	    refresh();
 	}
 
-	
+	if (next_goodie == 0) {
+	    if (goodie_on_screen == false) {
+		world_new_goodie(GOODIE_APPLE, row, col);
+		goodie_on_screen = true;
+		next_goodie = 25;
+	    }
+	    else
+		; /* Wait for goodie to be catched */
 
-	usleep(100000);
+	}
+	else
+	    next_goodie--;
+        
+	usleep(50000);
     }
 
     void *res;
