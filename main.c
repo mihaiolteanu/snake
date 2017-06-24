@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #define SNAKE_MAX_SIZE 25
-#define SNAKE_INITIAL_SIZE 5
+#define SNAKE_INITIAL_SIZE 15
 #define SNAKE_LOOKS ACS_DIAMOND
 
 typedef struct {
@@ -192,12 +192,18 @@ int main() {
 	    break;
     	}
 
-        tail = snake_new_head_pos(&snake, head);
-	snake_paint(&snake);
-	snake_paint_block(tail, ' '); /* Tail erase. */
-	/* mvprintw(25, 0, "Old: %d, %d", oldtail.x, oldtail.y); */
-	refresh();
-        
+        /* It looks bad if the next head position is a snake block. */
+	chtype next_head = mvinch(head.x, head.y);
+	if (next_head != SNAKE_LOOKS) {
+	    tail = snake_new_head_pos(&snake, head);
+	    snake_paint(&snake);
+	    snake_paint_block(tail, ' '); /* Tail erase. */
+	    /* mvprintw(25, 0, "Old: %d, %d", oldtail.x, oldtail.y); */
+	    refresh();
+	}
+
+	
+
 	usleep(100000);
     }
 
